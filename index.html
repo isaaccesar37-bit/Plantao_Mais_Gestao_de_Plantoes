@@ -1464,24 +1464,26 @@ if('serviceWorker' in navigator){
       if(!rows.length){ toast('Insira ou cole ao menos um nome de enfermeiro.'); return; }
 
       db.shifts=db.shifts||[];
-      let details=[];
       for(let row of rows){
-        for(let m of row.shiftText.matchAll(/\b(P\d+)\s+(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})\s+([^,;\n]+)/gi)){
-          details.push({code:m[1].toUpperCase(),day:m[2],month:m[3],year:m[4],start:m[5],hospital:m[6].trim()});
-        }
+        row.shiftDetails=[...row.shiftText.matchAll(/\b(P\d+)\s+(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})\s+([^,;\n]+)/gi)].map(m=>({
+          code:m[1].toUpperCase(),day:m[2],month:m[3],year:m[4],start:m[5],hospital:m[6].trim()
+        }));
       }
 
-      for(let d of details){
-        if(db.shifts.some(s=>String(s.code||'').toUpperCase()===d.code)) continue;
+      for(let d of rows.flatMap(row=>row.shiftDetails)){
+        let date=`${d.year}-${d.month}-${d.day}`;
+        if(db.shifts.some(s=>String(s.code||'').toUpperCase()===d.code&&s.date===date&&String(s.start||'')===d.start)) continue;
         let [hh,mm]=d.start.split(':').map(Number),
             endHour=(hh+12)%24,
             end=`${String(endHour).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
-        db.shifts.push({id:id(),code:d.code,name:hh>=6&&hh<18?'Diurno':'Noturno',date:`${d.year}-${d.month}-${d.day}`,start:d.start,end,hospital:d.hospital||'Hospital',unit:d.hospital||'Hospital',vacancies:2});
+        db.shifts.push({id:id(),code:d.code,name:hh>=6&&hh<18?'Diurno':'Noturno',date,start:d.start,end,hospital:d.hospital||'Hospital',unit:d.hospital||'Hospital',vacancies:2});
       }
 
       rows=rows.map(row=>{
         let codes=[...row.shiftText.matchAll(/\bP\d+\b/gi)].map(m=>m[0].toUpperCase()),
-            shifts=db.shifts.filter(s=>codes.includes(String(s.code||'').toUpperCase())).map(s=>s.id);
+            shifts=row.shiftDetails.length
+              ?row.shiftDetails.map(d=>db.shifts.find(s=>String(s.code||'').toUpperCase()===d.code&&s.date===`${d.year}-${d.month}-${d.day}`&&String(s.start||'')===d.start)?.id).filter(Boolean)
+              :db.shifts.filter(s=>codes.includes(String(s.code||'').toUpperCase())).map(s=>s.id);
         return{...row,shifts};
       });
 
